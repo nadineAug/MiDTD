@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-
-
 import logging
 from argparse import ArgumentParser
 from src.tasks.preprocessing_funcs import load_dataloaders
@@ -45,7 +43,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     print(args)
 
-    df_train, train_loader, test_alldata_loader, train_len, df_test_alldata = load_dataloaders(args)
+    df_train, df_test, df_dev, train_loader, test_loader, dev_loader, train_len = load_dataloaders(args)
 
     if not os.path.isfile('./data/idx_prob.pkl'):
         update_label(args, train_loader)
@@ -70,8 +68,6 @@ if __name__ == "__main__":
     else:
         new_logit = generate_new_logit(args, train_logit, df_train)
 
-
-    """CTD_Sdown_Tup_entropy"""
     file_path = './data/T_dict_mu1{mu1}_mu2{mu2}_k{k}_rou{rou}.pkl'.format(mu1=args.mu1, mu2=args.mu2, k=args.k, rou=args.rou)
     print(file_path)
     if not os.path.isfile(file_path):
@@ -82,8 +78,6 @@ if __name__ == "__main__":
         k = args.rou
         for i in tqdm(range(len(idx_prob))):
             prob_gold = F.softmax(torch.tensor(new_logit[i]), 0)
-
-            """熵"""
             entropy = - torch.sum(prob_gold * torch.log(prob_gold))
             T1 = 1. + mu1 * torch.exp(-k*entropy)
             T2 = 1. + mu2 * torch.exp(-k*entropy)
@@ -93,4 +87,4 @@ if __name__ == "__main__":
         with open(file_path, 'wb') as output:
             pickle.dump(T_dict, output)
 
-    train_with_softlabel(args, train_loader, test_alldata_loader, train_len, df_test_alldata)
+    train_with_softlabel(args, df_dev, train_loader, dev_loader, train_len)

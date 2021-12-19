@@ -32,7 +32,6 @@ def process_NYT_text(text, args):
         rel = items[4]
         if rel not in rel_list:
             rel = 'NA'
-        """处理情况1 """
         if items[5][-11:] == ' ###END###\n':
             sent = items[5][:-11]
         else:
@@ -95,8 +94,6 @@ def data_split(full_list, ratio, random_seed, shuffle=False):
     return sublist_1, sublist_2
 
 def preprocess_NYT(args):
-
-    """关系"""
     if not os.path.isfile('./data/relations.pkl'):
         rm = Relations_Mapper(args)
         save_as_pickle('relations.pkl', rm)
@@ -110,16 +107,6 @@ def preprocess_NYT(args):
 
     dev_text, train_text = data_split(text, ratio=0.3, random_seed=1, shuffle=True)
 
-    """100%训练数据"""
-    if not os.path.isfile('./data/df_train_alldata.pkl'):
-        sents, relations, _ = process_NYT_text(text, args)
-        df_train_alldata = pd.DataFrame(data={'sents': sents, 'relations': relations})
-        df_train_alldata['relations_id'] = df_train_alldata.progress_apply(lambda x: rm.rel2idx[x['relations']], axis=1)
-        save_as_pickle('df_train_alldata.pkl', df_train_alldata)
-    else:
-        df_train_alldata = load_pickle('df_train_alldata.pkl')
-
-    """训练数据"""
     if not os.path.isfile('./data/df_train.pkl'):
         sents, relations, _ = process_NYT_text(train_text, args)
         df_train = pd.DataFrame(data={'sents': sents, 'relations': relations})
@@ -128,45 +115,27 @@ def preprocess_NYT(args):
     else:
         df_train = load_pickle('df_train.pkl')
 
-    """测试数据"""
-    if not os.path.isfile('./data/df_test.pkl'):  # 注意这里test为了节约时间，缩减至整个test的20%
+    if not os.path.isfile('./data/df_test.pkl'):
         data_path = args.test_data
         logger.info("Reading test file %s..." % data_path)
         with open(data_path, 'r', encoding='utf8') as f:
             text = f.readlines()
         sents, relations, entity_pairs = process_NYT_text(text, args)
-        df_test_alldata = pd.DataFrame(data={'sents': sents, 'relations': relations, 'entity_pairs': entity_pairs})
-        df_test = df_test_alldata.sample(frac=0.2, axis=0)
-        df_test['relations_id'] = df_test.progress_apply(lambda x: rm.rel2idx[x['relations']],
-                                                         axis=1)
-        save_as_pickle('df_test.pkl', df_test)  # 20% test
+        df_test = pd.DataFrame(data={'sents': sents, 'relations': relations, 'entity_pairs': entity_pairs})
+        df_test['relations_id'] = df_test.progress_apply(lambda x: rm.rel2idx[x['relations']], axis=1)
+        save_as_pickle('df_test.pkl', df_test)
     else:
         df_test = load_pickle('df_test.pkl')
-    if not os.path.isfile('./data/df_test_alldata.pkl'):
-        data_path = args.test_data
-        logger.info("Reading test file %s..." % data_path)
-        with open(data_path, 'r', encoding='utf8') as f:
-            text = f.readlines()
-        sents, relations, entity_pairs = process_NYT_text(text, args)
-        df_test_alldata = pd.DataFrame(
-            data={'sents': sents, 'relations': relations, 'entity_pairs': entity_pairs})
-        df_test_alldata['relations_id'] = df_test_alldata.progress_apply(lambda x: rm.rel2idx[x['relations']],
-                                                         axis=1)
-        save_as_pickle('df_test_alldata.pkl', df_test_alldata)
+
+    if not os.path.isfile('./data/df_dev.pkl'):
+        sents, relations, entity_pairs = process_NYT_text(dev_text, args)
+        df_dev = pd.DataFrame(data={'sents': sents, 'relations': relations, 'entity_pairs': entity_pairs})
+        df_dev['relations_id'] = df_dev.progress_apply(lambda x: rm.rel2idx[x['relations']], axis=1)
+        save_as_pickle('df_dev.pkl', df_dev)
     else:
-        df_test_alldata = load_pickle('df_test_alldata.pkl')
+        df_dev = load_pickle('df_dev.pkl')
 
-
-    """暂时加上dev用于数据统计"""
-    # if not os.path.isfile('./data/df_dev.pkl'):
-    #     sents, relations, _ = process_NYT_text(dev_text, args)  #
-    #     df_dev = pd.DataFrame(data={'sents': sents, 'relations': relations})
-    #     df_dev['relations_id'] = df_dev.progress_apply(lambda x: rm.rel2idx[x['relations']], axis=1)
-    #     save_as_pickle('df_dev.pkl', df_dev)  # 此时表格一共有句子、关系、关系id三列（还有个行数列，默认的
-    # else:
-    #     df_train = load_pickle('df_dev.pkl')
-
-    return df_train, df_test, rm, df_test_alldata
+    return df_train, df_dev, df_test, rm
 
 
 class Relations_Mapper(object):
@@ -244,7 +213,7 @@ class NYT_dataset(Dataset):
             save_as_pickle(save_input_path, self.df['input'])
 
         if os.path.isfile("./data/" + save_e1e2_path):
-            save_e1e2 = load_pickle(save_e1e2_path)  # 17w
+            save_e1e2 = load_pickle(save_e1e2_path)
             self.df['e1_e2_start'] = save_e1e2
             logger.info("Loaded data save_e1e2 for training.")
         else:
@@ -294,52 +263,27 @@ def load_dataloaders(args):
     e2_id = tokenizer.convert_tokens_to_ids('[E2]')
     assert e1_id != e2_id != 1
 
-    # add
     if args.task == 'NYT':
         relations_path = './data/relations.pkl'
         train_path = './data/df_train.pkl'
-        train_sample_path = './data/df_train_sample.pkl'
         dev_path = './data/df_dev.pkl'
         test_path = './data/df_test.pkl'
-        testall_path = './data/df_test_all.pkl'
-        trainalldata_path = './data/df_train_alldata.pkl'
-        testalldata_path = './data/df_test_alldata.pkl'
-        # test1_path = './data/df_test_one.pkl'
-        testallbag_path = './data/df_test_allbag.pkl'
-        if os.path.isfile(relations_path) and os.path.isfile(train_path) and os.path.isfile(testalldata_path) and os.path.isfile(train_sample_path):
-        # if os.path.isfile(relations_path) and os.path.isfile(train_path) and os.path.isfile(testalldata_path) and os.path.isfile(train_sample_path) and os.path.isfile(dev_path):
+        if os.path.isfile(relations_path) and os.path.isfile(train_path) and os.path.isfile(dev_path) and os.path.isfile(test_path):
             rm = load_pickle('relations.pkl')
-            df_train = load_pickle('df_train.pkl')  # 399018 (70% train)
-            df_test = load_pickle('df_test.pkl')  # 20%测试集
-            # df_dev = load_pickle('df_dev.pkl')  # 验证集 暂时 这个估计是之前10%的dev
-            df_test_alldata = load_pickle('df_test_alldata.pkl')  # 100%测试集
-            # df_train_alldata = load_pickle('df_train_alldata.pkl')  # 100%测试集
-            df_train_sample = load_pickle('df_train_sample.pkl')  # 采样300个样本
+            df_train = load_pickle('df_train.pkl')
+            df_test = load_pickle('df_test.pkl')
+            df_dev = load_pickle('df_dev.pkl')
         else:
-            # df_train, df_test, rm = preprocess_NYT(args)
-            df_train, df_test, rm, df_test_alldata, df_train_sample = preprocess_NYT(args)
-
-        # if os.path.isfile(testall_path) and os.path.isfile(test1_path) and os.path.isfile(testallbag_path):
-        #     df_test_all = load_pickle('df_test_all.pkl')
-        #     with open(test1_path, 'rb') as pkl_file:
-        #         df_test_one = pickle.load(pkl_file)
-        #     with open(testallbag_path, 'rb') as pkl_file:
-        #         df_test_allbag = pickle.load(pkl_file)
-        #     logger.info("Loaded preproccessed data.")
-        # else:
-        #     df_test_all = load_pickle('df_test_all.pkl')
-            # df_test_one, df_test_allbag = make_test_data_12all(df_test_alldata)
+            df_train, df_dev, df_test, rm = preprocess_NYT(args)
 
         train_set = NYT_dataset(df_train, tokenizer=tokenizer, e1_id=e1_id, e2_id=e2_id, args=args, \
                                 save_input_path='save_train_input.pkl', save_e1e2_path='save_train_e1e2.pkl')
 
-        # 20% test
         test_set = NYT_dataset(df_test, tokenizer=tokenizer, e1_id=e1_id, e2_id=e2_id, args=args, \
-                               save_input_path='save_test_input.pkl', save_e1e2_path='save_test_e1e2.pkl')  # 这之后df_test里就有e1_e2_start
+                               save_input_path='save_test_input.pkl', save_e1e2_path='save_test_e1e2.pkl')
 
-        # 100% test
-        test_alldata_set = NYT_dataset(df_test_alldata, tokenizer=tokenizer, e1_id=e1_id, e2_id=e2_id, args=args, \
-                               save_input_path='save_test_alldata_input.pkl', save_e1e2_path='save_test_alldata_e1e2.pkl')
+        dev_set = NYT_dataset(df_test, tokenizer=tokenizer, e1_id=e1_id, e2_id=e2_id, args=args, \
+                               save_input_path='save_dev_input.pkl', save_e1e2_path='save_dev_e1e2.pkl')
 
         train_length = len(train_set)
 
@@ -348,13 +292,9 @@ def load_dataloaders(args):
                           label2_pad_value=-1)
         train_loader = DataLoader(train_set, batch_size=args.batch_size, shuffle=True, \
                                   num_workers=0, collate_fn=PS, pin_memory=False)
-        # train_sample_loader = DataLoader(train_sample_set, batch_size=args.batch_size, shuffle=True, \
-        #                           num_workers=0, collate_fn=PS, pin_memory=False)
         test_loader = DataLoader(test_set, batch_size=args.batch_size, shuffle=True, \
                                  num_workers=0, collate_fn=PS, pin_memory=False)
-        test_alldata_loader = DataLoader(test_alldata_set, batch_size=args.batch_size, shuffle=False, \
+        dev_loader = DataLoader(dev_set, batch_size=args.batch_size, shuffle=True, \
                                  num_workers=0, collate_fn=PS, pin_memory=False)
 
-
-
-    return df_train, train_loader, test_alldata_loader, train_length, df_test_alldata
+    return df_train, df_test, df_dev, train_loader, test_loader, dev_loader, train_length

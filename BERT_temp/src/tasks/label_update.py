@@ -167,7 +167,6 @@ def generate_new_logit(args, train_logit, df_train):
             tmp_logit = rou * bag_logit + (1-rou) * np.array(train_logit[idx])
             new_logit[idx] = list(tmp_logit)
     new_logit_path = './data/new_logit_rou{}.pkl'.format(args.rou)
-    # print(new_logit_path)
     with open(new_logit_path, 'wb') as output:
         pickle.dump(new_logit, output)
     print("Finished !")

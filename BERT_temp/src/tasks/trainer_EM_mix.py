@@ -19,8 +19,7 @@ logging.basicConfig(format='%(asctime)s [%(levelname)s]: %(message)s', \
                     datefmt='%m/%d/%Y %I:%M:%S %p', level=logging.INFO)
 logger = logging.getLogger(__file__)
 
-def train_with_softlabel(args, train_loader, test_alldata_loader, train_len, df_test_alldata):
-
+def train_with_softlabel(args, df_dev, train_loader, dev_loader, train_len):
     if args.fp16:    
         from apex import amp
     else:
@@ -95,6 +94,7 @@ def train_with_softlabel(args, train_loader, test_alldata_loader, train_len, df_
             soft_label = pickle.load(pkl_file)
 
     logger.info("Starting training process...")
+
     for epoch in range(start_epoch, args.num_epochs):
         start_time = time.time()
         net.train(); total_loss = 0.0; losses_per_batch = []; total_acc = 0.0; accuracy_per_batch = []
@@ -112,8 +112,6 @@ def train_with_softlabel(args, train_loader, test_alldata_loader, train_len, df_
             classification_logits = net(x, token_type_ids=token_type_ids, attention_mask=attention_mask, Q=None,\
                           e1_e2_start=e1_e2_start)
 
-
-            """CTD_Sdown/_Sdown_Tup """
             target = labels.squeeze(1)
             probability = F.softmax(classification_logits, dim=1)
             one_hot = torch.zeros(probability.shape).cuda().scatter(1, torch.unsqueeze(target, dim=1), 1)
@@ -139,7 +137,6 @@ def train_with_softlabel(args, train_loader, test_alldata_loader, train_len, df_
 
             alpha = 0.8
             loss = (1 - alpha) * loss_1 + alpha * loss_2
-
 
             loss = loss/args.gradient_acc_steps
             if args.fp16:
@@ -177,7 +174,7 @@ def train_with_softlabel(args, train_loader, test_alldata_loader, train_len, df_
             print("###################################")
 
             logger.info("Evaluating AUC...")
-            AUC = evaluate_results_bag(df_test_alldata, net, test_alldata_loader, pad_id, cuda, args, mode='testalldata', train_or_test='train')
+            AUC = evaluate_results_bag(df_dev, net, dev_loader, pad_id, cuda, args, mode='testalldata', train_or_test='train')
 
             auc_per_epoch.append(AUC)
             losses_per_epoch.append(sum(losses_per_batch)/len(losses_per_batch))

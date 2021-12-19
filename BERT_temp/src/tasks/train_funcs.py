@@ -3,15 +3,13 @@
 
 import os
 import torch
-from ..misc import save_as_pickle, load_pickle
+from ..misc import load_pickle
 import logging
 from tqdm import tqdm
-from sklearn.metrics import average_precision_score # add
+from sklearn.metrics import average_precision_score
 import numpy as np
 import pickle
 import torch.nn.functional as F
-import xlwt
-from xlwt import *
 
 logging.basicConfig(format='%(asctime)s [%(levelname)s]: %(message)s', \
                     datefmt='%m/%d/%Y %I:%M:%S %p', level=logging.INFO)
@@ -40,7 +38,7 @@ def load_state(net, optimizer, scheduler, args, load_best=False):
             optimizer.load_state_dict(checkpoint['optimizer'])
         if scheduler is not None:
             from collections import Counter
-            checkpoint['scheduler']['milestones'] = Counter(checkpoint['scheduler']['milestones'])  # add
+            checkpoint['scheduler']['milestones'] = Counter(checkpoint['scheduler']['milestones'])
             scheduler.load_state_dict(checkpoint['scheduler'])
         amp_checkpoint = checkpoint['amp']
         logger.info("Loaded model and optimizer.")    
@@ -163,40 +161,40 @@ def calc_prec_recall_f1(y_actual, y_pred, none_id=0, eps=0.0001):
     return precision, recall, f1
 
 def split_bag(df_data, mode):
-    # df_data = df_data.reset_index(drop=True)  # df_test里的都是连续的
+    df_data = df_data.reset_index(drop=True)
     print("Start splitting bag for testing...")
     grouped = df_data.groupby(['entity_pairs'])
-    bag_idxinbag = {}  # key是实体的名称，value是该包中句子的idx
-    for i, j in tqdm(grouped):  # 根据包含相同的##实体##划分包  96674个包(df_test_alldata)
-        if mode[-7:] == 'testone':  # 只考虑#sen>1的包 用于P@N
+    bag_idxinbag = {}
+    for i, j in tqdm(grouped):
+        if mode[-7:] == 'testone':
             if len(list(j.index.values)) > 1:
                 bag_idxinbag[i] = list(j.index.values)
-        elif mode[-11:] == 'testalldata':  # 用于AUC
-            bag_idxinbag[i] = list(j.index.values)  # 将array转为list
+        elif mode[-11:] == 'testalldata':
+            bag_idxinbag[i] = list(j.index.values)
 
     print("Finished !")
     return bag_idxinbag
 
-def evaluate_results_bag_train(df_test, net, test_loader, pad_id, cuda, args, mode):
+def evaluate_results_bag_train(df_dev, net, test_loader, pad_id, cuda, args, mode):
     AUC = 0
     num_classes = args.num_classes
     y_true = []
     y_scores = []
-    if mode[-7:] == 'testone':
-        if os.path.isfile('./data/bag_idxinbag_testall.pkl'):
-            with open('./data/bag_idxinbag_testall.pkl', 'rb') as pkl_file:
+    if mode[-7:] == 'devone':
+        if os.path.isfile('./data/bag_idxinbag_devall.pkl'):
+            with open('./data/bag_idxinbag_devall.pkl', 'rb') as pkl_file:
                 bag_idxinbag = pickle.load(pkl_file)
         else:
-            bag_idxinbag = split_bag(df_test, mode=mode)
-            with open('./data/bag_idxinbag_testall.pkl', 'wb') as output:
+            bag_idxinbag = split_bag(df_dev, mode=mode)
+            with open('./data/bag_idxinbag_devall.pkl', 'wb') as output:
                 pickle.dump(bag_idxinbag, output)
     if mode[-11:] == 'testalldata':
-        if os.path.isfile('./data/bag_idxinbag_testalldata.pkl'):
-            with open('./data/bag_idxinbag_testalldata.pkl', 'rb') as pkl_file:
-                bag_idxinbag = pickle.load(pkl_file)  # 96674
+        if os.path.isfile('./data/bag_idxinbag_devalldata.pkl'):
+            with open('./data/bag_idxinbag_devalldata.pkl', 'rb') as pkl_file:
+                bag_idxinbag = pickle.load(pkl_file)
         else:
-            bag_idxinbag = split_bag(df_test, mode=mode)
-            with open('./data/bag_idxinbag_testalldata.pkl', 'wb') as output:
+            bag_idxinbag = split_bag(df_dev, mode=mode)
+            with open('./data/bag_idxinbag_devalldata.pkl', 'wb') as output:
                 pickle.dump(bag_idxinbag, output)
 
     with torch.no_grad():
@@ -205,7 +203,7 @@ def evaluate_results_bag_train(df_test, net, test_loader, pad_id, cuda, args, mo
             x, e1_e2_start, labels, index = data
             attention_mask = (x != pad_id).float()
             token_type_ids = torch.zeros((x.shape[0], x.shape[1])).long()
-            temp = np.zeros((len(labels), num_classes)).tolist()  # (16,53) （#sample, #classes）
+            temp = np.zeros((len(labels), num_classes)).tolist()
             cnt = 0
             for r in labels:
                 temp[cnt][r.item()] = 1
@@ -226,10 +224,8 @@ def evaluate_results_bag_train(df_test, net, test_loader, pad_id, cuda, args, mo
             one_hot = torch.zeros(probability.shape).cuda().scatter(1, torch.unsqueeze(target, dim=1), 1)
 
             for j, idx in enumerate(index):
-                # 生成test_logit.pkl
                 logits = classification_logits[j].cpu().data.numpy().tolist()
                 test_logit[idx] = logits
-                # 生成test_onehot.pkl
                 one_hots = one_hot[j].cpu().data.numpy().tolist()
                 test_onehot[idx] = one_hots
 
@@ -253,7 +249,7 @@ def evaluate_results_bag_train(df_test, net, test_loader, pad_id, cuda, args, mo
     ################################ 用于entity-level (测P@N和AUC) ########################
 
     if mode[-11:] == 'testalldata':
-        AUC = average_precision_score(y_true, y_scores)  # add
+        AUC = average_precision_score(y_true, y_scores)
         print('AUC: ', AUC)
 
     if mode[-7:] == 'testall' or mode[-7:] == 'testone':
@@ -347,7 +343,7 @@ def evaluate_results_bag_test(df_test, net, test_loader, pad_id, cuda, args, mod
                 x, e1_e2_start, labels, index = data
                 attention_mask = (x != pad_id).float()
                 token_type_ids = torch.zeros((x.shape[0], x.shape[1])).long()
-                temp = np.zeros((len(labels), num_classes)).tolist()  # (16,53) （#sample, #classes）
+                temp = np.zeros((len(labels), num_classes)).tolist()
                 cnt = 0
                 for r in labels:
                     temp[cnt][r.item()] = 1
@@ -404,11 +400,11 @@ def evaluate_results_bag_test(df_test, net, test_loader, pad_id, cuda, args, mod
     ################################ 用于entity-level (测P@N和AUC) ########################
 
     if mode[-11:] == 'testalldata':
-        AUC = average_precision_score(y_true, y_scores)  # add
+        AUC = average_precision_score(y_true, y_scores)
         print('AUC: ', AUC)
 
     if mode[-7:] == 'testall' or mode[-7:] == 'testone':
-        order = np.argsort(-y_scores)  # y_scores都是正例的分数  # 全部改成用logit选
+        order = np.argsort(-y_scores)
 
         def p_score(n):
             corr_num = 0.0
@@ -434,7 +430,7 @@ def evaluate_results_bag_test(df_test, net, test_loader, pad_id, cuda, args, mod
     return AUC
 
 
-def evaluate_results_bag(df_test, net, test_loader, pad_id, cuda, args, mode, train_or_test):  #
+def evaluate_results_bag(df_test, net, test_loader, pad_id, cuda, args, mode, train_or_test):
     net.eval()
 
     """基于包的训练阶段"""

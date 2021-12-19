@@ -3,7 +3,6 @@
 
 import logging
 from argparse import ArgumentParser
-from plot import pr_curve
 from src.tasks.tester import test
 from src.tasks.preprocessing_funcs import load_dataloaders
 
