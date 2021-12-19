@@ -56,5 +56,5 @@ python test_task.py
 
 ## Datasets
 The datasets used in our paper are show as follows.
-- [NYT19](https://github.com/PaddlePaddle/models/tree/develop/PaddleNLP/Research/ACL2019-ARNOR)(including NYT19-1.0 and NYT19-2.0)
+- [NYT19](https://github.com/PaddlePaddle/Research/tree/master/NLP)(including NYT19-1.0 and NYT19-2.0)
 - [NYT10](https://drive.google.com/drive/folders/1PG5L0j4KBW7LTkNHlE2YFRamaUBlDbZs?usp=sharing)
