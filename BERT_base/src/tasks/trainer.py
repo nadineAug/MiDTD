@@ -137,10 +137,6 @@ def train_and_dev(args, train_loader, dev_loader, test_loader, train_len, dev_le
 
         if (epoch % 1) == 0:
             AUC = evaluate_results(net, dev_loader, pad_id, cuda, args, mode="val")
-            print("============")
-            print("test!!!!!!!!")
-            _ = evaluate_results(net, test_loader, pad_id, cuda, args)
-            print("============")
             auc_per_epoch.append(AUC)
             losses_per_epoch.append(sum(losses_per_batch)/len(losses_per_batch))
             accuracy_per_epoch.append(sum(accuracy_per_batch)/len(accuracy_per_batch))
